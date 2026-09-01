@@ -12,6 +12,12 @@
  *  - PATCH {API_BASE_URL}/tasks/{id}/status
  *      -> body: { status: "신규" | "확인중" | "진행중" | "보류" | "완료" }
  *      -> 200 OK, body: { success: true }
+ *  - PATCH {API_BASE_URL}/tasks/{id}/dates
+ *      -> body: { receivedDate: "YYYY-MM-DD", dueDate: "YYYY-MM-DD" }
+ *      -> 200 OK, body: { success: true }
+ *  - POST  {API_BASE_URL}/tasks
+ *      -> body: 신규 업무 필드(제목/서비스/요청자/계열사/중요도/접수일/마감일/원문 등)
+ *      -> 200 OK, body: { success: true, task: Task }
  */
 
 const API_CONFIG = {
@@ -79,6 +85,78 @@ async function updateTaskStatus(taskId, newStatus) {
     throw new Error(`상태 변경 실패 (status: ${res.status})`);
   }
   return res.json();
+}
+
+/**
+ * 업무의 접수일/마감일을 변경합니다. (간트차트에서 드래그로 일정 조정 시 호출)
+ * @param {string} taskId
+ * @param {{receivedDate: string, dueDate: string}} dates
+ * @returns {Promise<{success: boolean}>}
+ */
+async function updateTaskDates(taskId, { receivedDate, dueDate }) {
+  if (API_CONFIG.useMock) {
+    await _delay(150);
+    const store = _getMockStore();
+    const task = store.find((t) => t.id === taskId);
+    if (!task) {
+      throw new Error(`업무를 찾을 수 없습니다: ${taskId}`);
+    }
+    task.receivedDate = receivedDate;
+    task.dueDate = dueDate;
+    return { success: true };
+  }
+
+  const res = await fetch(`${API_CONFIG.apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/dates`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ receivedDate, dueDate }),
+  });
+  if (!res.ok) {
+    throw new Error(`일정 변경 실패 (status: ${res.status})`);
+  }
+  return res.json();
+}
+
+/**
+ * 새 업무를 등록합니다.
+ * @param {Object} taskData - 제목/서비스/요청자/계열사/중요도/접수일/마감일/원문 등
+ * @returns {Promise<{success: boolean, task: Object}>}
+ */
+async function createTask(taskData) {
+  if (API_CONFIG.useMock) {
+    await _delay(150);
+    const store = _getMockStore();
+    const newTask = {
+      status: TASK_STATUS.NEW,
+      aiSummary: '',
+      todo: [],
+      originalLink: '',
+      ...taskData,
+      id: _generateMockTaskId(store),
+    };
+    store.push(newTask);
+    return { success: true, task: { ...newTask } };
+  }
+
+  const res = await fetch(`${API_CONFIG.apiBaseUrl}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(taskData),
+  });
+  if (!res.ok) {
+    throw new Error(`업무 등록 실패 (status: ${res.status})`);
+  }
+  return res.json();
+}
+
+function _generateMockTaskId(store) {
+  const year = new Date().getFullYear();
+  const usedNumbers = store.map((t) => {
+    const match = t.id.match(/-(\d+)$/);
+    return match ? parseInt(match[1], 10) : 0;
+  });
+  const nextNumber = (usedNumbers.length ? Math.max(...usedNumbers) : 0) + 1;
+  return `T-${year}-${String(nextNumber).padStart(3, '0')}`;
 }
 
 function _delay(ms) {

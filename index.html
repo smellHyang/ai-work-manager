@@ -13,13 +13,16 @@
         <h1>업무관리 대시보드</h1>
         <span class="subtitle">Personal Work Kanban</span>
       </div>
-      <div class="last-updated" id="lastUpdated"></div>
+      <div class="header-actions">
+        <span class="last-updated" id="lastUpdated"></span>
+        <button class="btn-primary" id="newTaskBtn" type="button">+ 새 업무 등록</button>
+      </div>
     </header>
 
     <section class="gantt-section">
       <div class="gantt-toolbar">
         <div class="gantt-title-group">
-          <h2 class="gantt-title">주간 일정</h2>
+          <h2 class="gantt-title">간트차트 (주간)</h2>
           <span class="gantt-range" id="ganttRange"></span>
         </div>
         <div class="gantt-nav">
@@ -27,6 +30,11 @@
           <button class="gantt-nav-btn gantt-nav-today" id="ganttToday" type="button">오늘</button>
           <button class="gantt-nav-btn" id="ganttNextWeek" type="button" aria-label="다음 주">&rsaquo;</button>
         </div>
+      </div>
+      <div class="gantt-legend">
+        <span class="legend-item"><span class="legend-swatch legend-solid"></span>진행 기간 (드래그로 일정 조정)</span>
+        <span class="legend-item"><span class="legend-swatch legend-remaining"></span>마감일까지 남은 기간</span>
+        <span class="legend-item"><span class="legend-diamond"></span>마감일</span>
       </div>
       <div class="gantt-chart" id="ganttChart"></div>
     </section>
@@ -38,6 +46,37 @@
 
   <div class="detail-backdrop" id="detailBackdrop"></div>
   <aside class="detail-panel" id="detailPanel"></aside>
+
+  <div class="modal-backdrop" id="newTaskBackdrop"></div>
+  <div class="modal" id="newTaskModal">
+    <div class="modal-header">
+      <h3>새 업무 등록</h3>
+      <button class="modal-close" id="newTaskClose" type="button" aria-label="닫기">&times;</button>
+    </div>
+    <form class="modal-body" id="newTaskForm">
+      <label>제목<input name="title" type="text" required /></label>
+      <label>서비스<input name="service" type="text" required /></label>
+      <label>요청자<input name="requester" type="text" required /></label>
+      <label>계열사<input name="affiliate" type="text" required /></label>
+      <label>
+        중요도
+        <select name="priority">
+          <option value="높음">높음</option>
+          <option value="중간" selected>중간</option>
+          <option value="낮음">낮음</option>
+        </select>
+      </label>
+      <div class="modal-row">
+        <label>접수일<input name="receivedDate" type="date" required /></label>
+        <label>마감일<input name="dueDate" type="date" required /></label>
+      </div>
+      <label>원문<textarea name="originalText" rows="3"></textarea></label>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="newTaskCancel" type="button">취소</button>
+        <button class="btn-primary" type="submit">등록</button>
+      </div>
+    </form>
+  </div>
 
   <script src="js/mockData.js"></script>
   <script src="js/api.js"></script>
