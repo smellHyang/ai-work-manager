@@ -16,7 +16,20 @@
       <div class="last-updated" id="lastUpdated"></div>
     </header>
 
-    <section class="summary-row" id="summaryCards"></section>
+    <section class="gantt-section">
+      <div class="gantt-toolbar">
+        <div class="gantt-title-group">
+          <h2 class="gantt-title">주간 일정</h2>
+          <span class="gantt-range" id="ganttRange"></span>
+        </div>
+        <div class="gantt-nav">
+          <button class="gantt-nav-btn" id="ganttPrevWeek" type="button" aria-label="이전 주">&lsaquo;</button>
+          <button class="gantt-nav-btn gantt-nav-today" id="ganttToday" type="button">오늘</button>
+          <button class="gantt-nav-btn" id="ganttNextWeek" type="button" aria-label="다음 주">&rsaquo;</button>
+        </div>
+      </div>
+      <div class="gantt-chart" id="ganttChart"></div>
+    </section>
 
     <main class="main-area">
       <div class="board" id="board"></div>

@@ -25,12 +25,17 @@ const PRIORITY_CLASS_MAP = {
   [TASK_PRIORITY.LOW]: 'priority-low',
 };
 
+const DOW_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 let tasks = [];
 let selectedTaskId = null;
 let draggedTaskId = null;
+let ganttWeekOffset = 0;
 
 const boardEl = document.getElementById('board');
-const summaryEl = document.getElementById('summaryCards');
+const ganttChartEl = document.getElementById('ganttChart');
+const ganttRangeEl = document.getElementById('ganttRange');
 const detailPanelEl = document.getElementById('detailPanel');
 const detailBackdropEl = document.getElementById('detailBackdrop');
 const lastUpdatedEl = document.getElementById('lastUpdated');
@@ -51,36 +56,93 @@ async function loadTasks() {
 }
 
 function render() {
-  renderSummary();
+  renderGantt();
   renderBoard();
   renderDetailPanel();
   lastUpdatedEl.textContent = `마지막 갱신: ${formatDateTime(new Date())}`;
 }
 
-function renderSummary() {
-  const newCount = tasks.filter((t) => t.status === TASK_STATUS.NEW).length;
-  const inProgressCount = tasks.filter((t) => t.status === TASK_STATUS.IN_PROGRESS).length;
-  const importantCount = tasks.filter(
-    (t) => t.priority === TASK_PRIORITY.HIGH && t.status !== TASK_STATUS.DONE
-  ).length;
-  const doneCount = tasks.filter((t) => t.status === TASK_STATUS.DONE).length;
+function getWeekStart(offsetWeeks) {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const daysSinceMonday = (now.getDay() + 6) % 7;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysSinceMonday + offsetWeeks * 7);
+  return monday;
+}
 
-  const cards = [
-    { label: '신규 건수', value: newCount, cls: 'summary-new' },
-    { label: '진행중', value: inProgressCount, cls: 'summary-in-progress' },
-    { label: '중요', value: importantCount, cls: 'summary-important' },
-    { label: '완료', value: doneCount, cls: 'summary-done' },
-  ];
+function renderGantt() {
+  const weekStart = getWeekStart(ganttWeekOffset);
+  const weekStartTime = weekStart.getTime();
+  const weekDays = Array.from({ length: 7 }, (_, i) => new Date(weekStartTime + i * DAY_MS));
+  const weekEndExclusive = weekStartTime + 7 * DAY_MS;
+  const todayStr = formatISODate(new Date());
 
-  summaryEl.innerHTML = cards
-    .map(
-      (c) => `
-      <div class="summary-card ${c.cls}">
-        <div class="summary-value">${c.value}</div>
-        <div class="summary-label">${c.label}</div>
-      </div>`
-    )
-    .join('');
+  ganttRangeEl.textContent = `${formatShortDate(weekDays[0])} - ${formatShortDate(weekDays[6])}`;
+
+  const headerHtml = `
+    <div class="gantt-head-row">
+      <div class="gantt-head-label"></div>
+      ${weekDays
+        .map((d, i) => {
+          const iso = formatISODate(d);
+          return `
+        <div class="gantt-head-day ${iso === todayStr ? 'is-today' : ''} ${i >= 5 ? 'is-weekend' : ''}">
+          <div class="dow">${DOW_LABELS[i]}</div>
+          <div class="dnum">${d.getDate()}</div>
+        </div>`;
+        })
+        .join('')}
+    </div>
+  `;
+
+  const rowTasks = tasks
+    .filter((t) => {
+      const start = new Date(t.receivedDate).getTime();
+      const end = new Date(t.dueDate).getTime() + DAY_MS;
+      return end > weekStartTime && start < weekEndExclusive;
+    })
+    .sort((a, b) => (a.receivedDate < b.receivedDate ? -1 : 1));
+
+  const bodyHtml =
+    rowTasks.length === 0
+      ? `<div class="gantt-empty">이번 주에 해당하는 업무가 없습니다.</div>`
+      : rowTasks
+          .map((t) => {
+            const start = new Date(t.receivedDate).getTime();
+            const end = new Date(t.dueDate).getTime() + DAY_MS;
+            const startIdx = Math.max(0, (start - weekStartTime) / DAY_MS);
+            const endIdx = Math.min(7, (end - weekStartTime) / DAY_MS);
+            const left = (startIdx / 7) * 100;
+            const width = Math.max(((endIdx - startIdx) / 7) * 100, (100 / 7) * 0.4);
+            const clipStart = start < weekStartTime;
+            const clipEnd = end > weekEndExclusive;
+
+            return `
+          <div class="gantt-row">
+            <div class="gantt-row-label">
+              <span class="row-priority-dot ${PRIORITY_CLASS_MAP[t.priority]}"></span>
+              <span>${escapeHtml(t.title)}</span>
+            </div>
+            <div class="gantt-row-track">
+              <div class="gantt-bar ${STATUS_CLASS_MAP[t.status]} ${clipStart ? 'clip-start' : ''} ${
+                clipEnd ? 'clip-end' : ''
+              }"
+                   style="left:${left}%;width:${width}%"
+                   data-task-id="${t.id}"
+                   title="${escapeAttr(t.title)} (${t.receivedDate} ~ ${t.dueDate})">
+                ${escapeHtml(t.title)}
+              </div>
+            </div>
+          </div>`;
+          })
+          .join('');
+
+  ganttChartEl.innerHTML = `${headerHtml}<div class="gantt-body">${bodyHtml}</div>`;
+
+  ganttChartEl.querySelectorAll('.gantt-bar').forEach((bar) => {
+    bar.addEventListener('click', () => openDetailPanel(bar.dataset.taskId));
+  });
 }
 
 function renderBoard() {
@@ -288,6 +350,19 @@ function bindGlobalEvents() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDetailPanel();
   });
+
+  document.getElementById('ganttPrevWeek').addEventListener('click', () => {
+    ganttWeekOffset -= 1;
+    renderGantt();
+  });
+  document.getElementById('ganttNextWeek').addEventListener('click', () => {
+    ganttWeekOffset += 1;
+    renderGantt();
+  });
+  document.getElementById('ganttToday').addEventListener('click', () => {
+    ganttWeekOffset = 0;
+    renderGantt();
+  });
 }
 
 function formatDateTime(date) {
@@ -295,6 +370,16 @@ function formatDateTime(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
     date.getHours()
   )}:${pad(date.getMinutes())}`;
+}
+
+function formatShortDate(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}.${pad(date.getDate())}`;
+}
+
+function formatISODate(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function escapeHtml(str) {
